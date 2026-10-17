@@ -9,10 +9,13 @@ import (
 	rb "github.com/go-embedded-ruby/ruby"
 )
 
-// The examples of DataFrame and Plot run without raising.
-func TestExamplesDataFramePlot(t *testing.T) {
-	for _, name := range []string{"dataframe.rb", "plot.rb"} {
-		path := filepath.Join("examples", name)
+// Every example runs without raising, and prints something.
+func TestExamples(t *testing.T) {
+	paths, _ := filepath.Glob(filepath.Join("examples", "*.rb"))
+	if len(paths) < 6 {
+		t.Fatalf("%d examples, want one per module", len(paths))
+	}
+	for _, path := range paths {
 		src, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
