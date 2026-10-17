@@ -302,7 +302,6 @@ func generator(v any) (*random.Generator, error) {
 	return nil, typeError(v, "a seed or a Stats::RNG")
 }
 
-
 // results converts what a Go func returned: a final error, when not nil,
 // raises; one other result is that value, several an Array.
 func results(vals []reflect.Value) (any, error) {

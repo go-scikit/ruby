@@ -36,6 +36,9 @@ var packages = []struct{ path, name string }{
 
 type constant struct{ name string }
 
+// exit is os.Exit, a seam for tests.
+var exit = os.Exit
+
 func main() {
 	dir := "."
 	if len(os.Args) > 1 {
@@ -43,7 +46,7 @@ func main() {
 	}
 	if err := writeAll(dir, moduleDir); err != nil {
 		fmt.Fprintln(os.Stderr, "gen:", err)
-		os.Exit(1)
+		exit(1)
 	}
 }
 
