@@ -419,7 +419,7 @@ func (e *dfEnv) results(vals []reflect.Value) (any, error) {
 }
 
 // out converts a Go result for Ruby: a time.Time is a UTC Time, a DType its
-// name, slices element by element; the rest as every binding converts it.
+// name, slices element by element (nil gives []); the rest as every binding converts it.
 func (e *dfEnv) out(v reflect.Value) any {
 	if v.Kind() == reflect.Interface {
 		if v.IsNil() {
@@ -437,10 +437,7 @@ func (e *dfEnv) out(v reflect.Value) any {
 	case []float64, []byte:
 		return out(v)
 	}
-	if v.Kind() == reflect.Slice {
-		if v.IsNil() {
-			return nil
-		}
+	if v.Kind() == reflect.Slice { // a nil slice is an empty Array
 		list := make([]any, v.Len())
 		for i := range list {
 			list[i] = e.out(v.Index(i))

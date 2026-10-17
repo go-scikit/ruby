@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	rb "github.com/go-embedded-ruby/ruby"
 	"github.com/go-dataframe/dataframe"
+	rb "github.com/go-embedded-ruby/ruby"
 	nd "github.com/go-ndarray/ndarray"
 )
 
@@ -122,6 +122,7 @@ func newDFFixture(t *testing.T) (*rb.Interp, dfFixture) {
 func TestDataFrameConstruction(t *testing.T) {
 	in, x := newDFFixture(t)
 	m := must[*dataframe.DataFrame](t)
+	ms := must[*dataframe.Series](t)
 	dfIs(t, in, `df`, x.df)
 	dfIs(t, in, `long`, x.long)
 	dfIs(t, in, `DataFrame.new({"b" => [1], "a" => ["z"]}, c: [true])`, m(dataframe.New(
@@ -129,6 +130,9 @@ func TestDataFrameConstruction(t *testing.T) {
 	dfIs(t, in, `DataFrame.new([[:a, NDArray.linspace(0, 1, 3)], ["s", df["pop"]]])`, m(dataframe.New(
 		dataframe.Col("a", must[*nd.Array](t)(nd.FromData([]float64{0, 0.5, 1}, 3))), dataframe.Col("s", x.s))))
 	dfIs(t, in, `DataFrame.new`, m(dataframe.New()))
+	dfIs(t, in, `DataFrame.new.columns`, m(dataframe.New()).Columns())
+	dfIs(t, in, `DataFrame.new.series`, m(dataframe.New()).Series())
+	dfIs(t, in, `DataFrame::Series.new([1]).valid`, ms(dataframe.NewSeries("", []any{int64(1)})).Valid())
 	evalErr(t, in, `DataFrame.new(t: [Time.utc(2020, 1, 2, 3, 4, 5), :sym])`, "ArgumentError", "")
 	evalErr(t, in, `DataFrame.new(a: [1, 2], b: [1])`, "ArgumentError", "length")
 	evalErr(t, in, `DataFrame.new(1)`, "TypeError", "Integer into Hash")
@@ -417,4 +421,469 @@ func m4(r *dataframe.Resampler, err error) *dataframe.Resampler {
 		panic(err)
 	}
 	return r
+}
+
+func TestDataFrameSeries(t *testing.T) {
+	in, x := newDFFixture(t)
+	ms := must[*dataframe.Series](t)
+	s, f, b, str, day := x.s, x.f, x.b, x.str, x.day
+	mf := func(v *nd.Array, err error) *nd.Array { return must[*nd.Array](t)(v, err) }
+	agg := func(v any, err error) any { return must[any](t)(v, err) }
+	fl := func(v []float64, err error) []float64 { return must[[]float64](t)(v, err) }
+	dt, err := day.Dt()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollMean := func(r *dataframe.Rolling, err error) *dataframe.Series {
+		return must[*dataframe.Rolling](t)(r, err).Mean()
+	}
+	disp := map[string][]byte{}
+	for k, v := range s.Display() {
+		disp[k] = v
+	}
+	for _, c := range []struct {
+		src  string
+		want any
+	}{
+		{`DataFrame::Series.new([1, 2, 3])`, ms(dataframe.NewSeries("", []any{int64(1), int64(2), int64(3)}))},
+		{`DataFrame::Series.new([1.5, nil], name: :a)`, ms(dataframe.NewSeries("a", []any{1.5, nil}))},
+		{`DataFrame::Series.new(NDArray.linspace(0, 1, 3), name: "a")`, ms(dataframe.NewSeries("a", mf(nd.FromData([]float64{0, 0.5, 1}, 3))))},
+		{`DataFrame::Series.new([1, 2], index: ["a", "b"])`, ms(dataframe.NewSeriesIndexed("", []any{int64(1), int64(2)},
+			must[*dataframe.Index](t)(dataframe.NewIndex("", []any{"a", "b"}))))},
+		{`DataFrame::Series.new([1, 2], index: DataFrame::Index.range(2))`, ms(dataframe.NewSeriesIndexed("", []any{int64(1), int64(2)}, dataframe.NewRangeIndex(2)))},
+		{`s.name`, s.Name()},
+		{`s.length`, s.Len()},
+		{`s.size`, s.Len()},
+		{`f.count`, f.Count()},
+		{`s.dtype`, s.DType()},
+		{`s.index`, s.Index()},
+		{`s.values`, mf(s.Values())},
+		{`s.to_ndarray`, mf(s.Values())},
+		{`s.floats`, fl(s.Floats())},
+		{`s.to_a`, s.Items()},
+		{`day.to_a`, day.Items()},
+		{`f.valid`, f.Valid()},
+		{`s.get(1)`, agg(s.Get(int64(1)))},
+		{`s.mean`, s.Mean()},
+		{`s.sum`, s.SumValue()},
+		{`f.sum`, f.SumValue()},
+		{`s.std`, s.Std()},
+		{`s.var`, s.VarDDOF(1)},
+		{`s.var(ddof: 0)`, s.VarDDOF(0)},
+		{`s.var(0)`, s.VarDDOF(0)},
+		{`s.min`, s.Min()},
+		{`s.max`, s.Max()},
+		{`day.max`, day.Max()},
+		{`s.median`, s.Median()},
+		{`s.prod`, s.Prod()},
+		{`str.nunique`, str.NUnique()},
+		{`s.quantile`, s.Quantile(0.5)},
+		{`s.quantile(0.25)`, s.Quantile(0.25)},
+		{`s.quantile(q: 0.75)`, s.Quantile(0.75)},
+		{`s.agg("sum")`, agg(s.Agg("sum"))},
+		{`s.agg(:mean)`, agg(s.Agg("mean"))},
+		{`s.head`, s.Head(5)},
+		{`s.head(1)`, s.Head(1)},
+		{`s.tail(2)`, s.Tail(2)},
+		{`str.unique`, str.Unique()},
+		{`str.value_counts`, str.ValueCounts()},
+		{`s.copy`, s.Copy()},
+		{`s.to_frame`, s.ToFrame()},
+		{`s.reset_index`, s.ResetIndex()},
+		{`f.isna`, f.IsNA()},
+		{`f.notna`, f.NotNA()},
+		{`f.dropna`, f.DropNA()},
+		{`f.fillna(0)`, ms(f.FillNA(int64(0)))},
+		{`f.ffill`, f.FFill()},
+		{`f.bfill`, f.BFill()},
+		{`s.shift`, s.Shift(1)},
+		{`s.shift(periods: 2)`, s.Shift(2)},
+		{`s.diff`, ms(s.Diff(1))},
+		{`s.pct_change(2)`, ms(s.PctChange(2))},
+		{`s.cumsum`, ms(s.CumSum())},
+		{`s.cumprod`, ms(s.CumProd())},
+		{`s.cummax`, ms(s.CumMax())},
+		{`s.cummin`, ms(s.CumMin())},
+		{`s.neg.abs`, ms(ms(s.Neg()).Abs())},
+		{`s.send(:-@)`, ms(s.Neg())},
+		{`f.round`, f.Round(0)},
+		{`s.div(7).round(decimals: 3)`, ms(s.Div(int64(7))).Round(3)},
+		{`s.rename("p")`, s.Rename("p")},
+		{`s.astype(:float32)`, ms(s.AsType(dataframe.Float32))},
+		{`s.reindex([2, 0])`, ms(s.Reindex([]any{int64(2), int64(0)}))},
+		{`s.with_index(DataFrame::Index.new(["a", "b", "c"]))`, ms(s.SetIndex(must[*dataframe.Index](t)(dataframe.NewIndex("", []any{"a", "b", "c"}))))},
+		{`s.sort_values`, s.SortValues(true)},
+		{`s.sort_values(ascending: false)`, s.SortValues(false)},
+		{`s.sort_values.sort_index(ascending: false)`, s.SortValues(true).SortIndex(false)},
+		{`s.sort_index`, s.SortIndex(true)},
+		{`s.between(500, 600)`, ms(s.Between(int64(500), int64(600)))},
+		{`str.isin("Lyon", "Rome")`, ms(str.IsIn("Lyon", "Rome"))},
+		{`str.isin(["Paris"])`, ms(str.IsIn("Paris"))},
+		{`s.isin(522, 1)`, ms(s.IsIn(int64(522), int64(1)))},
+		{`day.dt.year`, dt.Year()},
+		{`day.dt.month`, dt.Month()},
+		{`day.dt.day`, dt.Day()},
+		{`day.dt.hour`, dt.Hour()},
+		{`day.dt.minute`, dt.Minute()},
+		{`day.dt.second`, dt.Second()},
+		{`day.dt.day_of_week`, dt.DayOfWeek()},
+		{`day.dt.dayofweek`, dt.DayOfWeek()},
+		{`day.dt.day_of_year`, dt.DayOfYear()},
+		{`day.dt.dayofyear`, dt.DayOfYear()},
+		{`day.dt.normalize`, dt.Normalize()},
+		{`day.dt.strftime("%d/%m")`, dt.Strftime("%d/%m")},
+		{`day.to_period("M")`, ms(day.ToPeriod("M"))},
+		{`day.to_period("M").to_timestamp`, ms(ms(day.ToPeriod("M")).ToTimestamp())},
+		{`multi["v"].unstack`, must[*dataframe.DataFrame](t)(ms(x.multi.Column("v")).Unstack())},
+		{`s.to_s`, s.String()},
+		{`s.inspect`, s.String()},
+		{`s.to_html`, s.HTML()},
+		{`s.display`, disp},
+		{`s.+(1)`, ms(s.Add(int64(1)))},
+		{`s.add(s)`, ms(s.Add(s))},
+		{`str.add("!")`, ms(str.Add("!"))},
+		{`s.-(1.5)`, ms(s.Sub(1.5))},
+		{`s.sub(s)`, ms(s.Sub(s))},
+		{`s.*(2)`, ms(s.Mul(int64(2)))},
+		{`s.mul(f)`, ms(s.Mul(f))},
+		{`s./(2)`, ms(s.Div(int64(2)))},
+		{`s.div(f)`, ms(s.Div(f))},
+		{`s.%(7)`, ms(s.Mod(int64(7)))},
+		{`s.mod(7)`, ms(s.Mod(int64(7)))},
+		{`s.**(2)`, ms(s.Pow(int64(2)))},
+		{`s.pow(0.5)`, ms(s.Pow(0.5))},
+		{`s.floordiv(7)`, ms(s.FloorDiv(int64(7)))},
+		{`s > 525`, ms(s.Gt(int64(525)))},
+		{`s.gt(525)`, ms(s.Gt(int64(525)))},
+		{`s < 525`, ms(s.Lt(int64(525)))},
+		{`s.lt(s)`, ms(s.Lt(s))},
+		{`s >= 530`, ms(s.Ge(int64(530)))},
+		{`s.ge(530)`, ms(s.Ge(int64(530)))},
+		{`s <= 530`, ms(s.Le(int64(530)))},
+		{`s.le(530)`, ms(s.Le(int64(530)))},
+		{`str.eq("Lyon")`, ms(str.Eq("Lyon"))},
+		{`str.ne(:Lyon)`, ms(str.Ne("Lyon"))},
+		{`day > Time.utc(2024, 1, 1)`, ms(day.Gt(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)))},
+		{`b & s.lt(600)`, ms(b.And(ms(s.Lt(int64(600)))))},
+		{`b | s.lt(600)`, ms(b.Or(ms(s.Lt(int64(600)))))},
+		{`b ^ s.lt(600)`, ms(b.Xor(ms(s.Lt(int64(600)))))},
+		{`~b`, ms(b.Not())},
+		{`b.invert`, ms(b.Not())},
+		// The methods written by hand.
+		{`s[1]`, agg(s.At(1))},
+		{`s[-1]`, agg(s.At(-1))},
+		{`day[0]`, agg(day.At(0))},
+		{`f[1]`, nil},
+		{`s[b]`, ms(s.Filter(b))},
+		{`s[[true, false, false]]`, ms(s.Filter([]bool{true, false, false}))},
+		{`s[0..1]`, ms(s.Iloc(dataframe.Slice(0, 2)))},
+		{`s[[2, 0]]`, ms(s.Iloc(dataframe.Pos(2, 0)))},
+		{`s.filter(b)`, ms(s.Filter(b))},
+		{`s.filter([false, true, true])`, ms(s.Filter([]bool{false, true, true}))},
+		{`s.map { |v| v * 2 }`, ms(s.Map(func(v any) any { return v.(int64) * 2 }))},
+		{`f.map { |v| v.nil? ? "none" : "v" }`, ms(f.Map(func(v any) any {
+			if v == nil {
+				return "none"
+			}
+			return "v"
+		}))},
+		{`day.map { |v| v.year }`, ms(day.Map(func(v any) any { return int64(v.(time.Time).Year()) }))},
+		{`s.rolling(2).mean`, rollMean(s.Rolling(2))},
+		{`s.rolling(2, min_periods: 1).mean`, rollMean(s.RollingMin(2, 1))},
+		{`s.rolling(2).sum`, must[*dataframe.Rolling](t)(s.Rolling(2)).Sum()},
+		{`s.rolling(2).min`, must[*dataframe.Rolling](t)(s.Rolling(2)).Min()},
+		{`s.rolling(2).max`, must[*dataframe.Rolling](t)(s.Rolling(2)).Max()},
+		{`s.rolling(2).std`, must[*dataframe.Rolling](t)(s.Rolling(2)).Std()},
+		{`s.rolling(2).median`, must[*dataframe.Rolling](t)(s.Rolling(2)).Median()},
+		{`s.iloc([0, 2])`, ms(s.Iloc(dataframe.Pos(0, 2)))},
+		{`s.loc(1..2)`, ms(s.Loc(dataframe.LabelRange(int64(1), int64(2))))},
+		{`s.loc(b)`, ms(s.Loc(dataframe.Mask(b)))},
+		{`DataFrame::Series.new(["2024-03-04"]).to_datetime`, ms(dataframe.ToDatetime(ms(dataframe.NewSeries("", []any{"2024-03-04"}))))},
+		{`DataFrame::Series.new(["04/03/2024"]).to_datetime("%d/%m/%Y")`,
+			ms(dataframe.ToDatetime(ms(dataframe.NewSeries("", []any{"04/03/2024"})), "%d/%m/%Y"))},
+	} {
+		dfIs(t, in, c.src, c.want)
+	}
+}
+
+func TestDataFrameGroupsAndIndexes(t *testing.T) {
+	in, x := newDFFixture(t)
+	m := must[*dataframe.DataFrame](t)
+	ms := must[*dataframe.Series](t)
+	g := m3(x.long.GroupBy("k"))
+	g2 := m3(x.df.GroupBy("city", "pop"))
+	r := m4(x.ts.Resample("W"))
+	eval(t, in, `g = long.group_by("k"); r = ts.resample("W")`)
+	ix := x.multi.Index()
+	sx := must[*dataframe.Index](t)(dataframe.NewIndex("n", []any{"a", "b", "a"}))
+	eval(t, in, `ix = multi.index; sx = DataFrame::Index.new(["a", "b", "a"], name: "n")`)
+	keys, frames := g.Groups()
+	keys2, frames2 := g2.Groups()
+	var groups, groups2 []any
+	for i := range keys {
+		groups = append(groups, []any{keys[i], frames[i]})
+	}
+	for i := range keys2 {
+		groups2 = append(groups2, []any{keys2[i], frames2[i]})
+	}
+	ixDisp := map[string][]byte{}
+	for k, v := range sx.Display() {
+		ixDisp[k] = v
+	}
+	for _, c := range []struct {
+		src  string
+		want any
+	}{
+		{`g.mean`, m(g.Mean())},
+		{`g.sum`, m(g.Sum())},
+		{`g.count`, m(g.Count())},
+		{`g.min`, m(g.Min())},
+		{`g.max`, m(g.Max())},
+		{`g.median`, m(g.Median())},
+		{`g.std`, m(g.Std())},
+		{`g.var`, m(g.Var())},
+		{`g.first`, m(g.First())},
+		{`g.last`, m(g.Last())},
+		{`g.nunique`, m(g.NUnique())},
+		{`g.size`, g.Size()},
+		{`g.ngroups`, g.NGroups()},
+		{`g.n_groups`, g.NGroups()},
+		{`g.select("v").sum`, m(m3(g.Select("v")).Sum())},
+		{`g["v"].sum`, m(m3(g.Select("v")).Sum())},
+		{`g.transform("v", "sum")`, ms(g.Transform("v", "sum"))},
+		{`g.to_s`, g.String()},
+		{`g.inspect`, g.String()},
+		{`g.agg(v: [:sum, :max])`, m(g.Agg(dataframe.Agg("v", "sum", "max")))},
+		{`g.agg({"v" => "mean"}, c: :first)`, m(g.Agg(dataframe.Agg("v", "mean"), dataframe.Agg("c", "first")))},
+		{`g.groups`, groups},
+		{`df.group_by("city", "pop").groups`, groups2},
+		{`r.mean`, m(r.Mean())},
+		{`r.sum`, m(r.Sum())},
+		{`r.count`, m(r.Count())},
+		{`r.min`, m(r.Min())},
+		{`r.max`, m(r.Max())},
+		{`r.median`, m(r.Median())},
+		{`r.std`, m(r.Std())},
+		{`r.first`, m(r.First())},
+		{`r.last`, m(r.Last())},
+		{`r.size`, r.Size()},
+		{`r.agg(v: [:sum, :mean])`, m(r.Agg(dataframe.Agg("v", "sum", "mean")))},
+		{`ix.to_a`, ix.Labels()},
+		{`ix.labels`, ix.Labels()},
+		{`ix.length`, ix.Len()},
+		{`ix.size`, ix.Len()},
+		{`sx.name`, sx.Name()},
+		{`ix.names`, ix.Names()},
+		{`ix.nlevels`, ix.NLevels()},
+		{`ix.range?`, ix.IsRange()},
+		{`df.index.range?`, true},
+		{`ix.label(1)`, ix.Label(1)},
+		{`sx[2]`, sx.Label(2)},
+		{`sx.get("a")`, must[[]int](t)(sx.Get("a"))},
+		{`ix.get(["a", "y"])`, must[[]int](t)(ix.Get([]any{"a", "y"}))},
+		{`df.index.values`, must[*nd.Array](t)(x.df.Index().Values())},
+		{`sx.dtype`, sx.DType()},
+		{`ix.level(1)`, ms(ix.Level(1))},
+		{`ix.rename("p", "q")`, must[*dataframe.Index](t)(ix.Rename("p", "q"))},
+		{`ix.to_s`, ix.String()},
+		{`ix.inspect`, ix.String()},
+		{`sx.display`, ixDisp},
+		{`ts.index[0]`, x.ts.Index().Label(0)},
+		{`DataFrame::Index.range(3)`, dataframe.NewRangeIndex(3)},
+		{`DataFrame::Index.new([1, 2])`, must[*dataframe.Index](t)(dataframe.NewIndex("", []any{int64(1), int64(2)}))},
+	} {
+		dfIs(t, in, c.src, c.want)
+	}
+}
+
+func TestDataFrameErrors(t *testing.T) {
+	in, _ := newDFFixture(t)
+	eval(t, in, `g = long.group_by("k")`)
+	for _, c := range []struct{ src, class, msg string }{
+		// The table-driven methods.
+		{`df.head(1, 2)`, "ArgumentError", "given 2, expected 1"},
+		{`df.head(bogus: 1)`, "ArgumentError", "unknown keyword: :bogus (known: n)"},
+		{`df.columns(x: 1)`, "ArgumentError", "unknown keyword: :x (known: none)"},
+		{`df.head(1, n: 2)`, "ArgumentError", "n given both by position and by keyword"},
+		{`df.column`, "ArgumentError", "given 0, expected 1"},
+		{`df.column("nope")`, "ArgumentError", "no such column"},
+		{`df.column(1)`, "TypeError", "Integer into String"},
+		{`df.drop(1)`, "TypeError", "Integer into String"},
+		{`s.astype(:nope)`, "ArgumentError", "nope"},
+		{`df.with_column("y", [1])`, "ArgumentError", "length"},
+		// [] and filter.
+		{`df[1]`, "TypeError", "a column name, an Array of names or a mask"},
+		{`df[[1]]`, "TypeError", "Integer into String"},
+		{`df["a", "b"]`, "ArgumentError", "given 2, expected 1"},
+		{`df[[true]]`, "ArgumentError", ""},
+		{`df.filter(1)`, "TypeError", "Integer into Array"},
+		{`df.filter`, "ArgumentError", "given 0, expected 1"},
+		{`df.dtypes(1)`, "ArgumentError", "given 1, expected 0"},
+		{`df.to_h(1)`, "ArgumentError", "given 1, expected 0"},
+		{`df.to_csv(1)`, "ArgumentError", "given 1, expected 0"},
+		{`df.to_csv(bogus: 1)`, "ArgumentError", "unknown keyword: :bogus (known: header,"},
+		{`df.to_csv(sep: 1)`, "TypeError", "Integer into String"},
+		{`df.to_csv(header: 1)`, "TypeError", "true or false"},
+		{`df.to_csv(na_rep: 1)`, "TypeError", "Integer into String"},
+		{`df.write_csv`, "ArgumentError", "given 0, expected 1"},
+		{`df.write_csv(1)`, "TypeError", "Integer into String"},
+		{`df.write_csv("/no/such/dir/x.csv")`, "IOError", "no such file"},
+		{`df.write_csv("x.csv", bogus: 1)`, "ArgumentError", "unknown keyword"},
+		{`df.sort_values("pop", bogus: 1)`, "ArgumentError", "unknown keyword: :bogus (known: ascending)"},
+		{`df.sort_values`, "ArgumentError", "given 0, expected 1"},
+		{`df.sort_values(1)`, "TypeError", "String or an Array"},
+		{`df.sort_values("pop", ascending: 1)`, "TypeError", "true or false"},
+		{`df.sort_values("nope")`, "ArgumentError", "no such column"},
+		{`df.group_by("city", x: 1)`, "ArgumentError", "unknown keyword"},
+		{`df.group_by(1)`, "TypeError", "Integer into String"},
+		{`df.group_by("nope")`, "ArgumentError", "no such column"},
+		{`df.dropna(bogus: 1)`, "ArgumentError", "unknown keyword: :bogus (known: axis, how, thresh)"},
+		{`df.dropna(axis: "a")`, "TypeError", "String into Integer"},
+		{`df.dropna(axis: 2)`, "ArgumentError", "axis must be 0 or 1"},
+		{`df.dropna(1)`, "TypeError", "Integer into String"},
+		{`df.dropna(thresh: "a")`, "TypeError", "String into Integer"},
+		{`df.dropna(how: 1)`, "TypeError", "Integer into String"},
+		{`df.dropna(how: :some)`, "ArgumentError", "how must be :any or :all"},
+		{`df.dropna("nope")`, "ArgumentError", "no such column"},
+		{`df.fillna({1 => 2})`, "TypeError", "Integer into String"},
+		{`df.fillna("nope" => 2)`, "ArgumentError", "no such column"},
+		{`df.fillna`, "ArgumentError", "given 0, expected 1"},
+		{`df.astype({1 => :int64})`, "TypeError", "Integer into String"},
+		{`df.astype("city" => :int64)`, "ArgumentError", ""},
+		{`df.astype(1)`, "TypeError", "Integer into a dtype"},
+		{`df.astype(:int64)`, "ArgumentError", ""},
+		{`df.astype`, "ArgumentError", "given 0, expected 1"},
+		{`df.rename(1)`, "ArgumentError", "rename takes a Hash"},
+		{`df.rename({"a" => 1})`, "TypeError", "Integer into String"},
+		{`df.merge(1)`, "TypeError", "Integer into DataFrame"},
+		{`df.merge`, "ArgumentError", "given 0, expected 1"},
+		{`df.merge(df, bogus: 1)`, "ArgumentError", "unknown keyword: :bogus"},
+		{`df.merge(df, how: "sideways")`, "ArgumentError", ""},
+		{`df.join(df, bogus: 1)`, "ArgumentError", "unknown keyword: :bogus (known: how, lsuffix, rsuffix)"},
+		{`df.join(df, how: 1)`, "TypeError", "Integer into String"},
+		{`df.join(1)`, "TypeError", "Integer into DataFrame"},
+		{`df.join(df)`, "ArgumentError", ""},
+		{`df.melt(bogus: 1)`, "ArgumentError", "unknown keyword: :bogus (known: id_vars, value_vars)"},
+		{`df.melt(1)`, "ArgumentError", "given 1, expected 0"},
+		{`df.melt(id_vars: 1)`, "TypeError", "String or an Array"},
+		{`df.melt(id_vars: "nope")`, "ArgumentError", "no such column"},
+		{`df.query`, "ArgumentError", "given 0, expected 1"},
+		{`df.query(1)`, "TypeError", "Integer into String"},
+		{`df.query("pop >")`, "ArgumentError", "bad query"},
+		{`df.eval(1)`, "TypeError", "Integer into String"},
+		{`df.eval("pop >")`, "ArgumentError", "bad query"},
+		{`df.iloc`, "ArgumentError", "given 0, expected 1..2"},
+		{`df.iloc(0, x: 1)`, "ArgumentError", "unknown keyword"},
+		{`df.iloc("a")`, "TypeError", "a position, an Array, a Range or a mask"},
+		{`df.iloc(:some)`, "TypeError", "a position, an Array, a Range or a mask"},
+		{`df.iloc(["a"])`, "TypeError", "String into Integer"},
+		{`df.iloc([true, 1])`, "TypeError", "Integer into true or false"},
+		{`df.iloc("a".."b")`, "TypeError", "String into Integer"},
+		{`df.iloc(0.."b")`, "TypeError", "String into Integer"},
+		{`df.iloc(9)`, "ArgumentError", "out of range"},
+		{`df.loc`, "ArgumentError", "given 0, expected 1..2"},
+		{`df.loc(0, x: 1)`, "ArgumentError", "unknown keyword"},
+		{`df.loc(0...1)`, "ArgumentError", "a label range includes its end"},
+		{`df.loc(0, 1)`, "TypeError", "String or an Array"},
+		{`df.loc(9)`, "ArgumentError", "not in index"},
+		{`df.apply`, "ArgumentError", "no block given"},
+		{`df.apply(x: 1) { }`, "ArgumentError", "unknown keyword"},
+		{`df.apply(1, 2) { }`, "ArgumentError", "given 2, expected 0..1"},
+		{`df.apply(1) { }`, "TypeError", "Integer into String"},
+		{`df.apply { |r| raise "boom" }`, "RuntimeError", "boom"},
+		{`df.apply { |r| r["pop"] == 522 ? "a" : 1 }`, "ArgumentError", ""},
+		{`df.resample("D", bogus: 1)`, "ArgumentError", "unknown keyword: :bogus (known: on)"},
+		{`df.resample`, "ArgumentError", "given 0, expected 1"},
+		{`df.resample(1)`, "TypeError", "Integer into String"},
+		{`df.resample("D", on: 1)`, "TypeError", "Integer into String"},
+		{`df.resample("D")`, "ArgumentError", ""},
+		{`df.resample("D", on: "city")`, "ArgumentError", ""},
+		// Series.
+		{`DataFrame::Series.new([1], bogus: 1)`, "ArgumentError", "unknown keyword: :bogus (known: index, name)"},
+		{`DataFrame::Series.new`, "ArgumentError", "given 0, expected 1"},
+		{`DataFrame::Series.new([1], name: 1)`, "TypeError", "Integer into String"},
+		{`DataFrame::Series.new([1], index: [[1]])`, "ArgumentError", ""},
+		{`DataFrame::Series.new([1], index: [1, 2])`, "ArgumentError", "length"},
+		{`DataFrame::Series.new(1)`, "ArgumentError", "cannot make a column"},
+		{`s[]`, "ArgumentError", "given 0, expected 1"},
+		{`s["a"]`, "TypeError", "a position, an Array, a Range or a mask"},
+		{`s[9]`, "ArgumentError", "out of range"},
+		{`s[[9]]`, "ArgumentError", "out of range"},
+		{`s.filter(1)`, "TypeError", "Integer into Array"},
+		{`s.filter`, "ArgumentError", "given 0, expected 1"},
+		{`s.filter([true])`, "ArgumentError", ""},
+		{`s.map`, "ArgumentError", "no block given"},
+		{`s.map(1) { }`, "ArgumentError", "given 1, expected 0"},
+		{`s.map { |v| raise "boom" }`, "RuntimeError", "boom"},
+		{`s.map { |v| v == 522 ? "a" : 1 }`, "ArgumentError", ""},
+		{`s.rolling(2, bogus: 1)`, "ArgumentError", "unknown keyword: :bogus (known: min_periods)"},
+		{`s.rolling`, "ArgumentError", "given 0, expected 1"},
+		{`s.rolling("a")`, "TypeError", "String into Integer"},
+		{`s.rolling(2, min_periods: "a")`, "TypeError", "String into Integer"},
+		{`s.rolling(0)`, "ArgumentError", ""},
+		{`s.iloc`, "ArgumentError", "given 0, expected 1"},
+		{`s.iloc("a")`, "TypeError", "a position"},
+		{`s.loc(9)`, "ArgumentError", "not in index"},
+		{`s.iloc([9])`, "ArgumentError", "out of range"},
+		{`s.to_datetime(x: 1)`, "ArgumentError", "unknown keyword"},
+		{`s.to_datetime(1, 2)`, "ArgumentError", "given 2, expected 0..1"},
+		{`s.to_datetime(1)`, "TypeError", "Integer into String"},
+		{`str.to_datetime`, "ArgumentError", ""},
+		// GroupBy, Resampler, Index.
+		{`g.agg(1)`, "TypeError", "Integer into Hash"},
+		{`g.agg([[1, :sum]])`, "TypeError", "Integer into String"},
+		{`g.agg(v: 1)`, "TypeError", "String or an Array"},
+		{`g.agg(nope: :sum)`, "ArgumentError", ""},
+		{`g.groups(1)`, "ArgumentError", "given 1, expected 0"},
+		{`DataFrame::Index.new([1], bogus: 1)`, "ArgumentError", "unknown keyword: :bogus (known: name)"},
+		{`DataFrame::Index.new`, "ArgumentError", "given 0, expected 1"},
+		{`DataFrame::Index.new([1], name: 1)`, "TypeError", "Integer into String"},
+		{`DataFrame::Index.new(1)`, "ArgumentError", "cannot make a column"},
+		{`DataFrame::Index.range`, "ArgumentError", "given 0, expected 1"},
+		{`DataFrame::Index.range("a")`, "TypeError", "String into Integer"},
+	} {
+		evalErr(t, in, c.src, c.class, c.msg)
+	}
+}
+
+// dfSame must tell apart frames that differ in one value or in their type.
+func TestDFSameIsStrict(t *testing.T) {
+	a, _ := dataframe.New(dataframe.Col("a", []int64{1, 2}))
+	b, _ := dataframe.New(dataframe.Col("a", []int64{1, 3}))
+	s, _ := a.Column("a")
+	for i, c := range []struct {
+		got, want any
+		same      bool
+	}{
+		{a, a, true},
+		{a, b, false},
+		{s, a, false},
+		{"int64", dataframe.Int64, true},
+		{"float64", dataframe.Int64, false},
+		{[]any{a}, []*dataframe.DataFrame{a}, true},
+		{[]any{a}, []*dataframe.DataFrame{b}, false},
+		{[]any{a, a}, []*dataframe.DataFrame{a}, false},
+		{1, []*dataframe.DataFrame{a}, false},
+		{map[any]any{"k": "v"}, map[string][]byte{"k": []byte("v")}, true},
+		{map[any]any{"k": "w"}, map[string][]byte{"k": []byte("v")}, false},
+		{1, map[string][]byte{"k": []byte("v")}, false},
+		{1, time.Unix(0, 0), false},
+	} {
+		if got := dfSame(c.got, c.want); got != c.same {
+			t.Errorf("case %d: dfSame = %v", i, got)
+		}
+	}
+}
+
+// A name already taken by something else is an error of Register.
+func TestDataFrameRegisterConflicts(t *testing.T) {
+	for _, src := range []string{`module DataFrame; end`, `class DataFrame; module Series; end; end`} {
+		in := rb.New()
+		if _, err := in.Eval(src, "x.rb", 1); err != nil {
+			t.Fatal(err)
+		}
+		if err := registerDataFrame(in); err == nil || !strings.Contains(err.Error(), "already defined") {
+			t.Errorf("%s: registerDataFrame = %v", src, err)
+		}
+	}
 }
