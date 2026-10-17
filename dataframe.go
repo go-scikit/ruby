@@ -1794,5 +1794,4 @@ var dfDatetimeMethods = []dfM{
 	{ruby: "dayofyear", goName: "DayOfYear"},
 	{ruby: "normalize", goName: "Normalize"},
 	{ruby: "strftime", goName: "Strftime"},
-	{ruby: "inspect", goName: "Year"},
 }
