@@ -210,6 +210,9 @@ func registerStats(in *rb.Interp) error {
 // of the Go type.
 func defineDist(d *definer, m *rb.Module, ds dist) {
 	c := d.structClass(m, ds.name, ds.zero)
+	if c == nil {
+		return
+	}
 	t := reflect.TypeOf(ds.zero)
 	fields := readableFields(t)
 	c.DefineSingletonMethod("new", func(call *rb.Call) (any, error) {
@@ -226,6 +229,9 @@ func defineDist(d *definer, m *rb.Module, ds dist) {
 		c.DefineMethod(snakeName(name), func(call *rb.Call) (any, error) {
 			if err := arity(call, 1, 1); err != nil {
 				return nil, err
+			}
+			if len(call.Kwargs) > 0 {
+				return nil, argError("unknown keyword: :%s", sortedKeys(call.Kwargs)[0])
 			}
 			f := reflect.ValueOf(call.Self.Go()).MethodByName(name).Interface().(func(float64) float64)
 			return ufunc(call.Args[0], f)
@@ -383,10 +389,7 @@ func defineRNG(d *definer, m *rb.Module) {
 		return random.DefaultRNG(uint64(seed)), nil
 	})
 	for _, name := range []string{"Random", "StandardNormal", "Normal", "Uniform", "Integers", "Exponential", "StandardExponential", "Poisson", "Binomial", "Gamma", "Beta"} {
-		mt, ok := reflect.TypeFor[*random.Generator]().MethodByName(name)
-		if !ok {
-			panic(fmt.Sprintf("random.Generator has no %s", name))
-		}
+		mt, _ := reflect.TypeFor[*random.Generator]().MethodByName(name)
 		c.DefineMethod(snakeName(name), func(call *rb.Call) (any, error) {
 			return invoke(reflect.ValueOf(call.Self.Go()).Method(mt.Index), call, call.Args)
 		})
@@ -496,28 +499,17 @@ func bootstrap(c *rb.Call) (any, error) {
 			return nil, err
 		}
 	}
-	var blockErr error
 	statistic := func(s ...[]float64) float64 {
-		if blockErr != nil {
-			return 0
-		}
 		args := make([]any, len(s))
 		for i, x := range s {
 			args[i] = vec(x)
 		}
 		r, err := b.Call(args...)
-		if err == nil {
-			var f float64
-			if f, err = toFloat(r.Go()); err == nil {
-				return f
-			}
-		}
-		blockErr = err
-		return 0
+		abortOn(err)
+		f, err := toFloat(r.Go())
+		abortOn(err)
+		return f
 	}
 	res, err := stats.Bootstrap(samples, statistic, g, opts)
-	if blockErr != nil {
-		return nil, blockErr
-	}
 	return resultOrError(res, err)
 }

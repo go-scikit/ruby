@@ -3,7 +3,6 @@ package ruby
 import (
 	"errors"
 	"fmt"
-	"math"
 	"reflect"
 	"strings"
 
@@ -29,10 +28,9 @@ func (d *definer) module(name string) *rb.Module {
 	return m
 }
 
+// class defines a class inside parent; nil (and the error kept) when the
+// name is taken by something else.
 func (d *definer) class(parent *rb.Module, name string) *rb.Module {
-	if parent == nil {
-		return nil
-	}
 	c, err := parent.DefineClass(name, nil)
 	d.keep(err)
 	return c
@@ -44,19 +42,9 @@ func (d *definer) keep(err error) {
 	}
 }
 
-// fn defines a module function; it does nothing once an error is kept.
-func (d *definer) fn(m *rb.Module, name string, f rb.Func) {
-	if m != nil {
-		m.DefineSingletonMethod(name, f)
-	}
-}
-
-// method defines an instance method; it does nothing once an error is kept.
-func (d *definer) method(m *rb.Module, name string, f rb.Func) {
-	if m != nil {
-		m.DefineMethod(name, f)
-	}
-}
+// fn defines a module function.
+// Every binding is guarded: its Go algorithm may call back into Ruby.
+func (d *definer) fn(m *rb.Module, name string, f rb.Func) { m.DefineSingletonMethod(name, guarded(f)) }
 
 // structClass defines the class name inside parent for the Go struct type of
 // sample (a value, not a pointer): values of the type and pointers to it
@@ -137,7 +125,7 @@ func bindMethods(c *rb.Module, t reflect.Type, skip map[string]bool) []string {
 		}
 		name := snakeName(m.Name)
 		names = append(names, name)
-		c.DefineMethod(name, func(call *rb.Call) (any, error) {
+		c.DefineMethod(name, guarded(func(call *rb.Call) (any, error) {
 			recv := reflect.ValueOf(call.Self.Go())
 			if recv.Kind() != reflect.Pointer {
 				p := reflect.New(recv.Type())
@@ -145,7 +133,7 @@ func bindMethods(c *rb.Module, t reflect.Type, skip map[string]bool) []string {
 				recv = p
 			}
 			return invoke(recv.MethodByName(m.Name), call, call.Args)
-		})
+		}))
 	}
 	return names
 }
@@ -215,7 +203,6 @@ func invoke(fn reflect.Value, c *rb.Call, args []rb.Value) (any, error) {
 	kw, rest := split(c.Kwargs, "random_state")
 	in := make([]reflect.Value, 0, ft.NumIn())
 	pos, kwUsed := 0, len(rest) == 0
-	var blockErr error
 	for i := range ft.NumIn() {
 		t := ft.In(i)
 		switch {
@@ -234,7 +221,7 @@ func invoke(fn reflect.Value, c *rb.Call, args []rb.Value) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			in = append(in, reflect.ValueOf(scalarBlock(b, &blockErr)))
+			in = append(in, (&guard{}).makeFunc(scalarFuncType, blockCaller(b), false))
 		case t == generatorType:
 			g, err := generator(kw["random_state"].Go())
 			if err != nil {
@@ -281,11 +268,7 @@ func invoke(fn reflect.Value, c *rb.Call, args []rb.Value) (any, error) {
 	if len(kw) > 0 {
 		return nil, argError("unknown keyword: :random_state")
 	}
-	res := fn.Call(in)
-	if blockErr != nil {
-		return nil, blockErr
-	}
-	return results(res)
+	return results(fn.Call(in))
 }
 
 // wrongArgs is MRI's ArgumentError for a positional count that does not fit.
@@ -319,26 +302,6 @@ func generator(v any) (*random.Generator, error) {
 	return nil, typeError(v, "a seed or a Stats::RNG")
 }
 
-// scalarBlock is a block as a func(float64) float64. A Ruby exception in the
-// block, or a value that is not a number, is kept in *errp (the first one) and
-// the function answers NaN from then on, so the Go algorithm finishes
-// quickly; the binding raises *errp once it returns.
-func scalarBlock(b *rb.Block, errp *error) func(float64) float64 {
-	return func(x float64) float64 {
-		if *errp != nil {
-			return math.NaN()
-		}
-		r, err := b.Call(x)
-		if err == nil {
-			var f float64
-			if f, err = toFloat(r.Go()); err == nil {
-				return f
-			}
-		}
-		*errp = err
-		return math.NaN()
-	}
-}
 
 // results converts what a Go func returned: a final error, when not nil,
 // raises; one other result is that value, several an Array.

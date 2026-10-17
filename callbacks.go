@@ -1,7 +1,6 @@
 package ruby
 
 import (
-	"math"
 	"reflect"
 
 	rb "github.com/go-embedded-ruby/ruby"
@@ -26,17 +25,8 @@ func procCaller(v rb.Value) (caller, error) {
 	return func(args ...any) (rb.Value, error) { return v.Call("call", args...) }, nil
 }
 
-// guard keeps the first error a callback met. A Go algorithm cannot be
-// stopped from inside its callback, so after an error the callback answers
-// NaN (or leaves its output alone) without calling Ruby again, the algorithm
-// winds down, and the binding returns the error instead of its result.
-type guard struct{ err error }
-
-func (g *guard) fail(err error) {
-	if g.err == nil {
-		g.err = err
-	}
-}
+// guard builds the callbacks of one call of a binding.
+type guard struct{}
 
 // makeFunc builds a Go func of type t that calls Ruby. Its float64
 // parameters reach Ruby as Floats and its []float64 parameters as NDArrays
@@ -67,51 +57,55 @@ func (g *guard) makeFunc(t reflect.Type, call caller, splat bool) reflect.Value 
 				}
 			}
 		}
+		r, err := call(args...)
+		abortOn(err)
 		if outBuf {
 			out := in[len(in)-1].Interface().([]float64)
-			if g.err == nil {
-				g.fill(out, call, args)
+			v, err := toFloats(r.Go())
+			abortOn(err)
+			if len(v) != len(out) {
+				abortOn(argError("the block returned %d values, expected %d", len(v), len(out)))
 			}
+			copy(out, v)
 			return nil
 		}
-		f := math.NaN()
-		if g.err == nil {
-			f = g.scalar(call, args)
-		}
+		f, err := toFloat(r.Go())
+		abortOn(err)
 		return []reflect.Value{reflect.ValueOf(f)}
 	})
 }
 
-func (g *guard) scalar(call caller, args []any) float64 {
-	r, err := call(args...)
+// callbackAbort carries an error out of a callback, through the Go algorithm
+// that called it, to the binding (see guarded).
+type callbackAbort struct{ err error }
+
+// abortOn stops the running Go algorithm when err is not nil: its callback
+// cannot return an error, and answering NaN instead would let an adaptive
+// algorithm run on for as long as it takes to give up — a triple quadrature
+// whose block raises would call it a billion times.
+func abortOn(err error) {
 	if err != nil {
-		g.fail(err)
-		return math.NaN()
+		panic(callbackAbort{err})
 	}
-	f, err := toFloat(r.Go())
-	if err != nil {
-		g.fail(err)
-		return math.NaN()
-	}
-	return f
 }
 
-func (g *guard) fill(out []float64, call caller, args []any) {
-	r, err := call(args...)
-	if err != nil {
-		g.fail(err)
-		return
+// guarded wraps a binding whose Go algorithm calls back into Ruby: an error
+// in a callback ends the algorithm and becomes the binding's error. Any other
+// panic — a break or a throw in the block, unwinding to its Ruby frame — goes
+// on.
+func guarded(f rb.Func) rb.Func {
+	return func(c *rb.Call) (res any, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				a, ok := r.(callbackAbort)
+				if !ok {
+					panic(r)
+				}
+				res, err = nil, a.err
+			}
+		}()
+		return f(c)
 	}
-	v, err := toFloats(r.Go())
-	if err != nil {
-		g.fail(err)
-		return
-	}
-	if len(v) != len(out) {
-		g.fail(argError("the block returned %d values, expected %d", len(v), len(out)))
-		return
-	}
-	copy(out, v)
 }
 
 // fn is makeFunc for a func type known at compile time.

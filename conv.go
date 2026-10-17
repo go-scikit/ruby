@@ -412,7 +412,7 @@ func contains(list []string, s string) bool {
 var snakeOverrides = map[string]string{
 	"PValue": "pvalue", "ZStatistic": "zstatistic", "NObs": "nobs", "OmitNaN": "omit_nan",
 	"LogPDF": "logpdf", "LogCDF": "logcdf", "LogSF": "logsf", "LogPMF": "logpmf",
-	"DF": "df", "NaN": "nan",
+	"DF": "df", "NaN": "nan", "IntegrateBox1D": "integrate_box_1d",
 }
 
 // snakeName is the Ruby name of a Go identifier: PValue is pvalue, NumIter

@@ -30,6 +30,9 @@ import (
 func registerIntegrate(in *rb.Interp) error {
 	d := &definer{in: in}
 	m := d.module("Integrate")
+	if d.err != nil {
+		return d.err
+	}
 	d.structClass(m, "QuadResult", integrate.QuadResult{})
 	d.structClass(m, "Solution", integrate.Solution{})
 	d.structClass(m, "OdeintInfo", integrate.OdeintInfo{})

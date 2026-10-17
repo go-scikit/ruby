@@ -31,6 +31,9 @@ import (
 func registerOptimize(in *rb.Interp) error {
 	d := &definer{in: in}
 	m := d.module("Optimize")
+	if d.err != nil {
+		return d.err
+	}
 	for _, r := range []struct {
 		name   string
 		sample any
@@ -122,6 +125,10 @@ func toRange(v any) (optimize.Range, error) {
 	return r, nil
 }
 
+// errWorkers refuses workers: above 1: a Ruby block runs on one goroutine
+// at a time, and the Go side would call it from several at once.
+var errWorkers = rb.NewError("ArgumentError", "workers: must be 1: a Ruby block cannot be called from several goroutines at once")
+
 // optsFrom fills an option struct from keywords, nil when there are none.
 func optsFrom[O any](kw map[string]rb.Value) (*O, error) {
 	if len(kw) == 0 {
@@ -137,9 +144,6 @@ func optsFrom[O any](kw map[string]rb.Value) (*O, error) {
 // finish returns a result, or the error of the callback first, then the Go
 // error.
 func finish(g *guard, res any, err error) (any, error) {
-	if g.err != nil {
-		return nil, g.err
-	}
 	if err != nil {
 		return nil, goError(err)
 	}
@@ -440,6 +444,9 @@ func curveFit(c *rb.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if o != nil && o.Workers > 1 {
+		return nil, errWorkers
+	}
 	g := &guard{}
 	model := g.makeFunc(reflect.TypeFor[func(x float64, p []float64) float64](), call, true).Interface().(func(float64, []float64) float64)
 	res, err := optimize.CurveFit(model, x, y, p0, o)
@@ -480,8 +487,30 @@ func brute(c *rb.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if o != nil && o.Workers > 1 {
+		return nil, errWorkers
+	}
+	// Brute evaluates the grid on a goroutine of its own, where neither an
+	// error nor a break may unwind: what the block raised, or how it left, is
+	// kept and replayed here, on the caller's goroutine, once Brute is done.
 	g := &guard{}
-	res, err := optimize.Brute(fn[func([]float64) float64](g, call), rv.Interface().([]optimize.Range), o)
+	objective := fn[func([]float64) float64](g, call)
+	var pending any
+	safe := func(x []float64) (f float64) {
+		if pending != nil {
+			return math.NaN()
+		}
+		defer func() {
+			if r := recover(); r != nil {
+				pending, f = r, math.NaN()
+			}
+		}()
+		return objective(x)
+	}
+	res, err := optimize.Brute(safe, rv.Interface().([]optimize.Range), o)
+	if pending != nil {
+		panic(pending)
+	}
 	return finish(g, res, err)
 }
 

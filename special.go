@@ -21,6 +21,9 @@ import (
 func registerSpecial(in *rb.Interp) error {
 	d := &definer{in: in}
 	m := d.module("Special")
+	if d.err != nil {
+		return d.err
+	}
 	for _, f := range specialFuncs {
 		d.fn(m, snakeName(f.name), specialFunc(f.fn))
 	}

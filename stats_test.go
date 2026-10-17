@@ -334,3 +334,62 @@ func vecShape(x []float64, shape ...int) *nd.Array {
 	a, _ := nd.FromData(append([]float64(nil), x...), shape...)
 	return a
 }
+
+// The Stats functions and classes not generic over the data, each against the
+// Go call.
+func TestStatsObjectsMatchGo(t *testing.T) {
+	in := newInterp(t)
+	setSamples(t, in)
+	m := func(a *nd.Array, err error) *nd.Array {
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	k1 := must[*stats.GaussianKDE](t)(stats.NewGaussianKDE(sampleX, nil))
+	check(t, in, "Stats::GaussianKDE.new(X).evaluate([2, 3.5])", must[[]float64](t)(k1.EvaluateSlice([]float64{2, 3.5})))
+	check(t, in, "Stats::GaussianKDE.new(X).call(NDArray.from([2, 3.5], [2]))", must[[]float64](t)(k1.EvaluateSlice([]float64{2, 3.5})))
+	check(t, in, "Stats::GaussianKDE.new(X).factor", k1.Factor())
+	check(t, in, "Stats::GaussianKDE.new(X).integrate_box_1d(1, 3)", must[float64](t)(k1.IntegrateBox1D(1, 3)))
+	k1s := must[*stats.GaussianKDE](t)(stats.NewGaussianKDE(sampleX, &stats.GaussianKDEOptions{Bandwidth: stats.KDEBandwidth{Rule: stats.BandwidthSilverman}}))
+	check(t, in, "Stats::GaussianKDE.new(X, bandwidth: {rule: :silverman}).factor", k1s.Factor())
+	pts := m(nd.FromData(append(append([]float64{}, sampleX...), sampleY...), 2, 10))
+	k2 := must[*stats.GaussianKDE](t)(stats.NewGaussianKDE(pts, nil))
+	q := m(nd.FromData([]float64{2, 3, 2.5, 1.5}, 2, 2))
+	check(t, in, "Stats::GaussianKDE.new(NDArray.concatenate([XA, YA]).reshape(2, 10)).evaluate(NDArray.from([2, 3, 2.5, 1.5], [2, 2]))", must[[]float64](t)(k2.Evaluate(q)))
+
+	cov := m(nd.FromData([]float64{2, 0.5, 0.5, 1}, 2, 2))
+	mvn := must[*stats.MultivariateNormal](t)(stats.NewMultivariateNormal([]float64{0, 1}, cov, nil))
+	mvnRuby := "Stats::MultivariateNormal.new([0, 1], NDArray.from([2, 0.5, 0.5, 1], [2, 2]))"
+	check(t, in, mvnRuby+".logpdf([0.3, 0.2])", must[float64](t)(mvn.LogPDF([]float64{0.3, 0.2})))
+	check(t, in, mvnRuby+".cdf([0.3, 0.2], rng: 5, max_pts: 20000)", must[float64](t)(mvn.CDF([]float64{0.3, 0.2}, &stats.MultivariateNormalCDFOptions{RNG: random.DefaultRNG(5), MaxPts: 20000})))
+	check(t, in, mvnRuby+".rvs(3, random_state: 9)", must[*nd.Array](t)(mvn.Rvs(random.DefaultRNG(9), 3)))
+	dir := must[*stats.Dirichlet](t)(stats.NewDirichlet([]float64{1, 2, 3}))
+	check(t, in, "Stats::Dirichlet.new([1, 2, 3]).mean", dir.Mean())
+	check(t, in, "Stats::Dirichlet.new([1, 2, 3]).pdf([0.2, 0.3, 0.5])", must[float64](t)(dir.PDF([]float64{0.2, 0.3, 0.5})))
+	mn := must[*stats.Multinomial](t)(stats.NewMultinomial(5, []float64{0.2, 0.8}))
+	check(t, in, "Stats::Multinomial.new(5, [0.2, 0.8]).pmf([2, 3])", must[float64](t)(mn.PMF([]float64{2, 3})))
+
+	check(t, in, "Stats.chi2_contingency(NDArray.from([10, 20, 30, 40], [2, 2]))", must[stats.Chi2ContingencyResult](t)(stats.Chi2Contingency(m(nd.FromData([]float64{10, 20, 30, 40}, 2, 2)), nil)))
+	check(t, in, "Stats.fisher_exact([[1, 9], [11, 3]], alternative: :less)", must[stats.TestResult](t)(stats.FisherExact([2][2]int64{{1, 9}, {11, 3}}, &stats.FisherExactOptions{Alternative: stats.Less})))
+	fm, fc, err := stats.FitMultivariateNormal(pts, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, in, "Stats.fit_multivariate_normal(NDArray.concatenate([XA, YA]).reshape(2, 10))", []any{fm, fc})
+
+	norm := stats.Normal{Loc: 3, Scale: 1}
+	check(t, in, "d = Stats::Normal.new(3, 1); Stats.ks_1samp(X) { |x| d.cdf(x) }", must[stats.KSResult](t)(stats.KSTest1Samp(sampleX, norm.CDF, nil)))
+	check(t, in, "Stats.ks_1samp(XA, alternative: :less) { |x| d.cdf(x) }", must[stats.KSResult](t)(stats.KSTest1Samp(vec(sampleX), norm.CDF, &stats.KSOptions{Alternative: stats.Less})))
+
+	mean := func(s ...[]float64) float64 { return must[float64](t)(stats.Mean(s[0], nil)) }
+	check(t, in, "Stats.bootstrap([X], random_state: 3, n_resamples: 199, method: :percentile) { |s| Stats.mean(s) }",
+		must[stats.BootstrapResult](t)(stats.Bootstrap([][]float64{sampleX}, mean, random.DefaultRNG(3), &stats.BootstrapOptions{NResamples: 199, Method: stats.BootstrapPercentile})))
+	check(t, in, "Stats.bootstrap([X], random_state: Stats::RNG.new(3), n_resamples: 99) { |s| Stats.mean(s) }",
+		must[stats.BootstrapResult](t)(stats.Bootstrap([][]float64{sampleX}, mean, random.DefaultRNG(3), &stats.BootstrapOptions{NResamples: 99})))
+
+	rng := random.DefaultRNG(11)
+	check(t, in, "r = Stats::RNG.new(11); r.normal(1, 2, 3)", must[*nd.Array](t)(rng.Normal(1, 2, 3)))
+	check(t, in, "r.integers(0, 10, [2, 2])", must[*nd.Array](t)(rng.Integers(0, 10, 2, 2)))
+	check(t, in, "r.uniform(0, 1)", must[*nd.Array](t)(rng.Uniform(0, 1)))
+}
