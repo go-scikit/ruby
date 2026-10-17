@@ -194,6 +194,23 @@ func convert(v any, t reflect.Type) (reflect.Value, error) {
 			a, err := ndArray(v)
 			return reflect.ValueOf(a), err
 		}
+		if v == nil {
+			return reflect.Zero(t), nil
+		}
+		if reflect.TypeOf(v) != t {
+			// An optional value, such as Ddof *float64 or Range *[2]float64.
+			ev, err := convert(v, t.Elem())
+			if err != nil {
+				return reflect.Value{}, err
+			}
+			p := reflect.New(t.Elem())
+			p.Elem().Set(ev)
+			return p, nil
+		}
+	case reflect.Struct:
+		if h, ok := v.(map[any]any); ok {
+			return convertStruct(h, t)
+		}
 	}
 	if v != nil && reflect.TypeOf(v) == t {
 		return reflect.ValueOf(v), nil // a Go value that went through Ruby
@@ -202,6 +219,29 @@ func convert(v any, t reflect.Type) (reflect.Value, error) {
 }
 
 var ndArrayType = reflect.TypeFor[*nd.Array]()
+
+// convertStruct fills a struct from a Hash, as options fills an option
+// struct from keywords: bandwidth: {rule: :silverman}.
+func convertStruct(h map[any]any, t reflect.Type) (reflect.Value, error) {
+	p := reflect.New(t)
+	fields := fieldsByName(t)
+	for k, e := range h {
+		name, err := toString(k)
+		if err != nil {
+			return reflect.Value{}, err
+		}
+		f, ok := fields[normalize(name)]
+		if !ok {
+			return reflect.Value{}, argError("unknown key %s for %s (known: %s)", name, t.Name(), strings.Join(keywordNames(t), ", "))
+		}
+		ev, err := convert(e, f.Type)
+		if err != nil {
+			return reflect.Value{}, err
+		}
+		p.Elem().FieldByIndex(f.Index).Set(ev)
+	}
+	return p.Elem(), nil
+}
 
 // toString reads a String or a Symbol.
 func toString(v any) (string, error) {

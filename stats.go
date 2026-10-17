@@ -171,6 +171,13 @@ var elementwise = map[string]bool{
 	"SF": true, "LogSF": true, "PPF": true, "ISF": true,
 }
 
+func init() {
+	converters[generatorType] = func(v any) (reflect.Value, error) {
+		g, err := generator(v)
+		return reflect.ValueOf(g), err
+	}
+}
+
 func registerStats(in *rb.Interp) error {
 	d := &definer{in: in}
 	m := d.module("Stats")
@@ -478,7 +485,7 @@ func bootstrap(c *rb.Call) (any, error) {
 		}
 	}
 	kw, rest := split(c.Kwargs, "random_state")
-	g, err := generator(kw["random_state"])
+	g, err := generator(kw["random_state"].Go())
 	if err != nil {
 		return nil, err
 	}

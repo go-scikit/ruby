@@ -236,7 +236,7 @@ func invoke(fn reflect.Value, c *rb.Call, args []rb.Value) (any, error) {
 			}
 			in = append(in, reflect.ValueOf(scalarBlock(b, &blockErr)))
 		case t == generatorType:
-			g, err := generator(kw["random_state"])
+			g, err := generator(kw["random_state"].Go())
 			if err != nil {
 				return nil, err
 			}
@@ -304,8 +304,8 @@ func wrongArgs(given int, ft reflect.Type) error {
 
 // generator reads random_state: nil (a generator seeded by the system), an
 // Integer seed, or a Stats::RNG.
-func generator(v rb.Value) (*random.Generator, error) {
-	switch x := v.Go().(type) {
+func generator(v any) (*random.Generator, error) {
+	switch x := v.(type) {
 	case nil:
 		return nil, nil
 	case int64:
@@ -316,7 +316,7 @@ func generator(v rb.Value) (*random.Generator, error) {
 	case *random.Generator:
 		return x, nil
 	}
-	return nil, typeError(v.Go(), "a seed or a Stats::RNG")
+	return nil, typeError(v, "a seed or a Stats::RNG")
 }
 
 // scalarBlock is a block as a func(float64) float64. A Ruby exception in the
