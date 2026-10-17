@@ -421,6 +421,14 @@ parameters as readers.
 --- PASS: TestPrintBindings (0.02s)
 PASS
 ok  	github.com/go-scikit/ruby	1.227s
+## Notebooks
+
+Package [cells](cells/) runs the Ruby cells of a
+[go-notebook](https://github.com/go-notebook/notebook) notebook: one
+interpreter per worker, whose top-level locals persist from cell to cell, and
+the exchange of variables with the Go cells. Its documentation states the
+conversion rules both ways; a notebook links it, you do not call it.
+
 ## Build tags
 
 rbgo builds with or without its gem bindings; `-tags rbgo_core` leaves the
