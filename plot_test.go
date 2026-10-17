@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	rb "github.com/go-embedded-ruby/ruby"
 	"github.com/go-dataframe/dataframe"
+	rb "github.com/go-embedded-ruby/ruby"
 	nd "github.com/go-ndarray/ndarray"
 	"github.com/go-plot/plot"
 )
