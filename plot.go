@@ -102,6 +102,9 @@ import (
 func registerPlot(in *rb.Interp) error {
 	d := &definer{in: in}
 	m := d.module("Plot")
+	if d.err != nil {
+		return d.err
+	}
 	fig := d.class(m, "Figure")
 	ax := d.class(m, "Axes")
 	mp := d.class(m, "Mappable")
