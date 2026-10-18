@@ -119,15 +119,7 @@ func applyUfunc(fn reflect.Value, c *rb.Call) (any, error) {
 	}
 	n := len(flat[0])
 	res := make([]float64, n)
-	args := append([]reflect.Value(nil), scalars...)
-	for k := range n {
-		for i, j := range at {
-			if j >= 0 {
-				args[i] = reflect.ValueOf(flat[j][k])
-			}
-		}
-		res[k] = fn.Call(args)[0].Float()
-	}
+	ufuncLoop(fn, at, flat, scalars, res)
 	if allLists {
 		list := make([]any, n)
 		for k, r := range res {
@@ -160,4 +152,38 @@ func broadcast(arrays []*nd.Array) ([][]float64, []int, error) {
 		out[i] = arrayFloats(b)
 	}
 	return out, shape, nil
+}
+
+// ufuncLoop fills res with fn over the elements: flat holds the array
+// arguments, at says which argument each is (-1: the scalar in scalars).
+// The functions of one or two reals — most of Special — are called
+// directly; reflect.Value.Call allocates its arguments on every call and
+// costs ten times the function itself, so it is kept for the others.
+func ufuncLoop(fn reflect.Value, at []int, flat [][]float64, scalars []reflect.Value, res []float64) {
+	arg := func(i, k int) float64 {
+		if at[i] >= 0 {
+			return flat[at[i]][k]
+		}
+		return scalars[i].Float()
+	}
+	switch f := fn.Interface().(type) {
+	case func(float64) float64:
+		for k, x := range flat[0] {
+			res[k] = f(x)
+		}
+	case func(float64, float64) float64:
+		for k := range res {
+			res[k] = f(arg(0, k), arg(1, k))
+		}
+	default:
+		args := append([]reflect.Value(nil), scalars...)
+		for k := range res {
+			for i, j := range at {
+				if j >= 0 {
+					args[i] = reflect.ValueOf(flat[j][k])
+				}
+			}
+			res[k] = fn.Call(args)[0].Float()
+		}
+	}
 }
