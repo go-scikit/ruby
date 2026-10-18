@@ -134,6 +134,9 @@ func TestRunErrors(t *testing.T) {
 	if msg := catch(Cell{Source: "1", In: []Var{{Name: "a-b", Ptr: &bad}}}); !strings.Contains(msg, "not a local variable name") {
 		t.Fatalf("msg = %q", msg)
 	}
+	if got := describe(&rb.Error{Class: "E", Message: "m", Backtrace: []string{"lib.rb:1:in 'g'", "nb.md:2:in '<main>'"}}, "nb.md"); got != "E: m\n\tfrom nb.md:2:in '<main>'" {
+		t.Fatalf("describe = %q", got)
+	}
 	if got := describe(errors.New("plain"), "nb.md"); got != "plain" {
 		t.Fatal(got)
 	}
@@ -239,5 +242,17 @@ func TestNewWriting(t *testing.T) {
 	run(t, s, Cell{Source: "puts 1\nwarn 'w'"})
 	if out.String() != "1\n" || errOut.String() != "w\n" {
 		t.Fatalf("out %q err %q", out.String(), errOut.String())
+	}
+}
+
+func TestDeepRecursionIsBounded(t *testing.T) {
+	s := New()
+	var msg string
+	func() {
+		defer func() { msg = recover().(*Error).CellError() }()
+		run(t, s, Cell{Source: "def f(n) = f(n + 1)\nf(0)"})
+	}()
+	if !strings.Contains(msg, "stack level too deep (SystemStackError)") || !strings.Contains(msg, "more frames") || strings.Count(msg, "\n") > maxFrames+1 {
+		t.Fatalf("msg = %q", msg)
 	}
 }

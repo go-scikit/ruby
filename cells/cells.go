@@ -136,6 +136,10 @@ func (s *Session) Run(c Cell, show func(...any), note func(name, typ string)) {
 	}
 }
 
+// maxFrames bounds the backtrace an error shows: a runaway recursion has
+// thousands of frames, all alike.
+const maxFrames = 12
+
 // describe renders a Ruby exception: file:line: message (Class), then the
 // backtrace frames that are in the notebook.
 func describe(err error, file string) string {
@@ -145,10 +149,17 @@ func describe(err error, file string) string {
 	}
 	var b strings.Builder
 	b.WriteString(e.Error())
+	n := 0
 	for _, f := range e.Backtrace {
-		if strings.HasPrefix(f, file+":") {
+		if !strings.HasPrefix(f, file+":") {
+			continue
+		}
+		if n++; n <= maxFrames {
 			b.WriteString("\n\tfrom " + f)
 		}
+	}
+	if n > maxFrames {
+		fmt.Fprintf(&b, "\n\t... and %d more frames", n-maxFrames)
 	}
 	return b.String()
 }
