@@ -2,7 +2,16 @@ module github.com/go-scikit/ruby
 
 go 1.27.2
 
-require github.com/go-embedded-ruby/ruby v0.6.0
+require (
+	github.com/go-dataframe/dataframe v0.1.0
+	github.com/go-embedded-ruby/ruby v0.8.0
+	github.com/go-ndarray/ndarray v0.12.0
+	github.com/go-numerics/integrate v0.2.0
+	github.com/go-numerics/optimize v0.2.0
+	github.com/go-numerics/special v0.1.0
+	github.com/go-plot/plot v0.1.1
+	github.com/go-statistics/stats v0.1.0
+)
 
 require (
 	filippo.io/age v1.3.2 // indirect
@@ -79,7 +88,6 @@ require (
 	github.com/go-composites/time v0.0.0-20260929013028-aa3c57ae1371 // indirect
 	github.com/go-crdt/collab v0.74.0 // indirect
 	github.com/go-crdt/crdt v0.55.0 // indirect
-	github.com/go-dataframe/dataframe v0.1.0 // indirect
 	github.com/go-datetime/dates v0.1.0 // indirect
 	github.com/go-encryptions/unixcrypt v0.1.0 // indirect
 	github.com/go-facter/facter v0.0.0-20260830120958-454b72e642ab // indirect
@@ -100,16 +108,11 @@ require (
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-mustache/mustache v0.1.0 // indirect
-	github.com/go-ndarray/ndarray v0.12.0 // indirect
 	github.com/go-nokogiri/nokogiri v0.1.0 // indirect
-	github.com/go-numerics/integrate v0.1.0 // indirect
-	github.com/go-numerics/optimize v0.1.0 // indirect
-	github.com/go-numerics/special v0.1.0 // indirect
 	github.com/go-opentype/fonts v0.12.0 // indirect
 	github.com/go-opentype/opentype v0.15.0 // indirect
 	github.com/go-opentype/shape v0.5.0 // indirect
 	github.com/go-pcore/pcore v0.0.0-20260831114716-f9c3e7f59eaa // indirect
-	github.com/go-plot/plot v0.1.1 // indirect
 	github.com/go-puppet/puppet v0.0.0-20260918012035-fc6b0424cdbd // indirect
 	github.com/go-regexp/engine v0.3.0 // indirect
 	github.com/go-richdoc/richdoc v0.4.0 // indirect
@@ -298,7 +301,6 @@ require (
 	github.com/go-simd/crc32 v0.0.0-20260903220012-5f164e0e0487 // indirect
 	github.com/go-simd/hex v0.0.0-20260903220024-a8d22a843218 // indirect
 	github.com/go-sql-driver/mysql v1.10.1 // indirect
-	github.com/go-statistics/stats v0.1.0 // indirect
 	github.com/go-tex/math v0.50.0 // indirect
 	github.com/go-typeset/bidi v0.3.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
@@ -410,5 +412,3 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 	modernc.org/sqlite v1.60.1 // indirect
 )
-
-replace github.com/go-embedded-ruby/ruby => ../../go-embedded-ruby/ruby.wt-ruby

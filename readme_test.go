@@ -5,13 +5,31 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	rb "github.com/go-embedded-ruby/ruby"
 )
 
 // bindings lists every Ruby name the bindings define: "Module.function",
 // "Class.class_method" and "Class#method", for the modules and classes
 // Register makes.
 func bindings(t *testing.T) []string {
-	in := newInterp(t)
+	// The names rbgo defines itself in the same modules (its own Stats,
+	// Special, Optimize and Integrate) are not this package's.
+	own := map[string]bool{}
+	for _, n := range walkNames(t, rb.New()) {
+		own[n] = true
+	}
+	var names []string
+	for _, n := range walkNames(t, newInterp(t)) {
+		if !own[n] {
+			names = append(names, n)
+		}
+	}
+	return names
+}
+
+// walkNames lists the names of the six modules in an interpreter.
+func walkNames(t *testing.T, in *rb.Interp) []string {
 	src := `
 out = []
 walk = lambda do |mod|
@@ -22,7 +40,7 @@ walk = lambda do |mod|
     walk.(v) if v.is_a?(Module) && v.name.start_with?("#{mod}::")
   end
 end
-[Stats, Special, Optimize, Integrate, DataFrame, Plot].each { |m| walk.(m) }
+[:Stats, :Special, :Optimize, :Integrate, :DataFrame, :Plot].each { |m| walk.(Object.const_get(m)) if Object.const_defined?(m) }
 out`
 	v, err := in.Eval(src, "names.rb", 1)
 	if err != nil {

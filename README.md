@@ -44,6 +44,8 @@ svg = fig.to_svg
 
 One short program per module is in [examples/](examples/); a test runs them all.
 
+> **Overlap with rbgo.** Since v0.7.0, rbgo defines modules `Stats`, `Special`, `Optimize` and `Integrate` of its own, over the same four libraries, with SciPy's names (`Stats.norm`, `Special.gammaln`). `Register` adds these bindings to those modules. Where both define the same name (`Special.gamma`, `Optimize.minimize`, …) this package's method replaces rbgo's, and the other names of both remain. Which of the two should own these modules is an open question, tracked with the release notes.
+
 ## The rules
 
 - **Same code underneath.** Every Ruby method calls the Go function it is named
