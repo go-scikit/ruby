@@ -393,3 +393,23 @@ func TestStatsObjectsMatchGo(t *testing.T) {
 	check(t, in, "r.integers(0, 10, [2, 2])", must[*nd.Array](t)(rng.Integers(0, 10, 2, 2)))
 	check(t, in, "r.uniform(0, 1)", must[*nd.Array](t)(rng.Uniform(0, 1)))
 }
+
+// A result's to_h holds every field, in order, converted as its readers
+// convert them: a []int an Array, a nil slice nil.
+func TestResultToH(t *testing.T) {
+	in := newInterp(t)
+	setSamples(t, in)
+	got := eval(t, in, "Stats.binned_statistic(X, Y, bins: 3).to_h.to_a")
+	res := must[stats.BinnedResult](t)(stats.BinnedStatistic(sampleX, sampleY, &stats.BinnedOptions{Bins: 3}))
+	want := []any{
+		[]any{rb.Symbol("statistic"), res.Statistic},
+		[]any{rb.Symbol("edges"), res.Edges},
+		[]any{rb.Symbol("bin_number"), res.BinNumber},
+	}
+	if !same(got, want) {
+		t.Fatalf("to_h = %#v", got)
+	}
+	if v := eval(t, in, "Integrate.quad(0, 1) { |x| x }.cycle_ier"); v != nil {
+		t.Fatalf("a nil slice reads %#v", v)
+	}
+}
