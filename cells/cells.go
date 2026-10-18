@@ -30,6 +30,7 @@ package cells
 
 import (
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"reflect"
@@ -58,9 +59,14 @@ type stderr struct{}
 
 func (stderr) Write(p []byte) (int, error) { return os.Stderr.Write(p) }
 
-// New starts an interpreter with the go-scikit modules.
-func New() *Session {
-	in := rb.New(rb.WithStdout(stdout{}), rb.WithStderr(stderr{}))
+// New starts an interpreter with the go-scikit modules, writing to the
+// process's standard output and error.
+func New() *Session { return NewWriting(stdout{}, stderr{}) }
+
+// NewWriting is New writing what Ruby prints to out, and its $stderr and
+// warnings to errOut: a host that captures a cell's output itself.
+func NewWriting(out, errOut io.Writer) *Session {
+	in := rb.New(rb.WithStdout(out), rb.WithStderr(errOut))
 	_ = scikit.Register(in) // a fresh interpreter has none of their names
 	obj, _ := in.Eval("Object", "(cells)", 1)
 	return &Session{in: in, obj: obj}

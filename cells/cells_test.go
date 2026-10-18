@@ -232,3 +232,12 @@ func TestGoValueAndType(t *testing.T) {
 		t.Fatal(anyv, err)
 	}
 }
+
+func TestNewWriting(t *testing.T) {
+	var out, errOut strings.Builder
+	s := NewWriting(&out, &errOut)
+	run(t, s, Cell{Source: "puts 1\nwarn 'w'"})
+	if out.String() != "1\n" || errOut.String() != "w\n" {
+		t.Fatalf("out %q err %q", out.String(), errOut.String())
+	}
+}
