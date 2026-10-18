@@ -186,7 +186,7 @@ func TestDataFrameConstruction(t *testing.T) {
 		{`DataFrame.read_csv("a", dtype: {"a" => :nope})`, "ArgumentError", "nope"},
 		{`DataFrame.read_csv("a", dtype: {"a" => 1})`, "TypeError", "Integer into a dtype"},
 		{`DataFrame.read_csv("a,b\n1,2\n3,4,5\n")`, "ArgumentError", "line"},
-		{`DataFrame.read_csv_file(path + ".none")`, "ArgumentError", "no such file"},
+		{`DataFrame.read_csv_file(path + ".none")`, "ArgumentError", "a.csv.none"}, // the system's own words differ
 		{`DataFrame.read_csv_file`, "ArgumentError", "given 0, expected 1"},
 	} {
 		evalErr(t, in, c.src, c.class, c.msg)
@@ -727,7 +727,7 @@ func TestDataFrameErrors(t *testing.T) {
 		{`df.to_csv(na_rep: 1)`, "TypeError", "Integer into String"},
 		{`df.write_csv`, "ArgumentError", "given 0, expected 1"},
 		{`df.write_csv(1)`, "TypeError", "Integer into String"},
-		{`df.write_csv("/no/such/dir/x.csv")`, "IOError", "no such file"},
+		{`df.write_csv("/no/such/dir/x.csv")`, "IOError", "/no/such/dir/x.csv"},
 		{`df.write_csv("x.csv", bogus: 1)`, "ArgumentError", "unknown keyword"},
 		{`df.sort_values("pop", bogus: 1)`, "ArgumentError", "unknown keyword: :bogus (known: ascending)"},
 		{`df.sort_values`, "ArgumentError", "given 0, expected 1"},

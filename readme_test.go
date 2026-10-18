@@ -61,7 +61,7 @@ func TestREADMEListsEveryBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(readme)
+	text := strings.ReplaceAll(string(readme), "\r\n", "\n") // a Windows checkout
 	missing := 0
 	for _, n := range bindings(t) {
 		// The README groups names by class: "Stats::Normal#pdf" is listed as

@@ -273,7 +273,7 @@ func TestPlotFigure(t *testing.T) {
 		}
 	}
 	evalErr(t, in, `fig.savefig(File.join(dir, "a.pdf"))`, "ArgumentError", "unknown format")
-	evalErr(t, in, `fig.save_svg(File.join(dir, "no", "such", "a.svg"))`, "IOError", "no such file")
+	evalErr(t, in, `fig.save_svg(File.join(dir, "no", "such", "a.svg"))`, "IOError", "a.svg")
 	evalErr(t, in, `fig.save_svg(1)`, "TypeError", "String")
 	evalErr(t, in, `fig.save_svg`, "ArgumentError", "given 0, expected 1")
 }

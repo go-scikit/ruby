@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -22,7 +23,8 @@ func TestGeneratedFilesAreCurrent(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if string(got) != string(want) {
+		// A Windows checkout has CRLF line endings; the generator writes LF.
+		if strings.ReplaceAll(string(got), "\r\n", "\n") != string(want) {
 			t.Errorf("%s is out of date: run go generate", f)
 		}
 	}
