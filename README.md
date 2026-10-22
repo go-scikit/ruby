@@ -419,17 +419,36 @@ parameters as readers.
 
 `a` `cdf` `entropy` `inspect` `interval` `isf` `kurtosis` `loc` `logcdf` `logpmf` `logsf` `mean` `median` `moment` `pmf` `ppf` `rvs` `sf` `skew` `std` `support` `to_h` `validate` `var` `new`
 
-
---- PASS: TestPrintBindings (0.02s)
-PASS
-ok  	github.com/go-scikit/ruby	1.227s
 ## Notebooks
 
-Package [cells](cells/) runs the Ruby cells of a
-[go-notebook](https://github.com/go-notebook/notebook) notebook: one
-interpreter per worker, whose top-level locals persist from cell to cell, and
-the exchange of variables with the Go cells. Its documentation states the
-conversion rules both ways; a notebook links it, you do not call it.
+These bindings are what a ` ```ruby ` cell of a
+[go-notebook](https://github.com/go-notebook/notebook) notebook (v0.3.0 and
+later) runs on. A notebook can mix Go and Ruby cells, and their variables
+cross both ways:
+
+````markdown
+```go
+xs := []float64{2.1, 3.4, 1.9, 5.6, 4.4, 3.3, 2.8, 4.9}
+```
+
+```ruby
+fit = Stats::Normal.fit(xs)   # xs is a Ruby Array of Floats here
+loc, scale = fit.loc, fit.scale
+```
+
+```go
+import "fmt"
+
+fmt.Printf("loc %.3f, scale %.3f\n", loc, scale) // float64s here
+```
+````
+
+Package [cells](cells/) runs those cells: one interpreter per worker, whose
+top-level locals persist from cell to cell, and the exchange of variables with
+the Go cells. Its documentation states the conversion rules both ways; a
+notebook links it, you do not call it. The notebook's kernel requires this
+module in its work module by itself, so a notebook's own `go.mod` only needs
+go-notebook.
 
 ## Build tags
 
