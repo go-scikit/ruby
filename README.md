@@ -455,8 +455,9 @@ go-notebook.
 rbgo builds with or without its gem bindings; `-tags rbgo_core` leaves the
 gems out (the language and the numeric stack only), which is what a notebook
 worker or a browser page wants. These bindings work, and are tested, on both.
-rbgo compiles for linux, darwin and windows on 64-bit targets and for wasm
-(js and wasip1), and so does this module.
+rbgo compiles for linux, darwin and windows on 64-bit targets, for 32-bit
+linux (`386`, `arm`) and for wasm (js and wasip1), and so does this module.
+CI runs the suite natively on `386` and under QEMU on 32-bit `arm`.
 
 ## License
 
