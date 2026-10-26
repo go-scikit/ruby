@@ -96,7 +96,7 @@ type Cell struct {
 
 // Error is a Ruby cell's failure: the exception, at its line in the
 // notebook, with the backtrace frames in the notebook.
-type Error struct{ msg string }
+type Error struct{ msg, class string }
 
 func (e *Error) Error() string { return e.msg }
 
@@ -110,19 +110,19 @@ func (e *Error) CellError() string { return e.msg }
 func (s *Session) Run(c Cell, show func(...any), note func(name, typ string)) {
 	for _, v := range c.In {
 		if err := s.set(v); err != nil {
-			panic(&Error{fmt.Sprintf("%s:%d: %v", c.File, c.Line, err)})
+			panic(&Error{msg: fmt.Sprintf("%s:%d: %v", c.File, c.Line, err)})
 		}
 	}
 	val, err := s.in.Eval(c.Source, c.File, c.Line)
 	if err != nil {
-		panic(&Error{describe(err, c.File)})
+		panic(describe(err, c.File))
 	}
 	for _, v := range c.Out {
 		got, _ := s.in.Lookup(v.Name) // nil when the assignment did not run
 		x := GoValue(got)
 		note(v.Name, GoType(x))
 		if err := assign(v.Ptr, x); err != nil {
-			panic(&Error{fmt.Sprintf("%s:%d: %s: %v", c.File, c.Line, v.Name, err)})
+			panic(&Error{msg: fmt.Sprintf("%s:%d: %s: %v", c.File, c.Line, v.Name, err)})
 		}
 	}
 	if c.Display && !val.IsNil() {
@@ -142,26 +142,15 @@ const maxFrames = 12
 
 // describe renders a Ruby exception: file:line: message (Class), then the
 // backtrace frames that are in the notebook.
-func describe(err error, file string) string {
+func describe(err error, file string) *Error {
 	e, ok := err.(*rb.Error)
 	if !ok {
-		return err.Error()
+		return &Error{msg: err.Error()}
 	}
 	var b strings.Builder
 	b.WriteString(e.Error())
-	n := 0
-	for _, f := range e.Backtrace {
-		if !strings.HasPrefix(f, file+":") {
-			continue
-		}
-		if n++; n <= maxFrames {
-			b.WriteString("\n\tfrom " + f)
-		}
-	}
-	if n > maxFrames {
-		fmt.Fprintf(&b, "\n\t... and %d more frames", n-maxFrames)
-	}
-	return b.String()
+	frames(&b, e.Backtrace, file)
+	return &Error{msg: b.String(), class: e.Class}
 }
 
 // set hands a Go variable to Ruby.

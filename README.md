@@ -450,6 +450,14 @@ notebook links it, you do not call it. The notebook's kernel requires this
 module in its work module by itself, so a notebook's own `go.mod` only needs
 go-notebook.
 
+The same package runs `notebook irb`, go-notebook's interactive session
+(v0.5.0 and later): `Session.Eval` evaluates one input as irb does — any local
+may be assigned again, `_` is the last value, an exception comes back as
+`message (Class)` with its frames — and `Session.Complete` gives the Tab
+completions of the word before the cursor, as IRB's default completor does
+(locals, methods of a variable's value, constants such as `Stats::Normal`,
+keywords), without ever calling a method the word contains.
+
 ## Build tags
 
 rbgo builds with or without its gem bindings; `-tags rbgo_core` leaves the
