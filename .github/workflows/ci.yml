@@ -154,17 +154,24 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.27.3'
-      - name: go test -c for each target, both builds
+      # Since rbgo v0.8.3 that is every `go tool dist list` pair but plan9
+      # (go-embedded-ruby/ruby#832). go vet type-checks every package and its
+      # tests without linking; android and ios link only through cgo, so their
+      # library packages are built instead.
+      - name: go vet for each target, both builds
         shell: bash
+        env:
+          CGO_ENABLED: "0"
         run: |
           fail=0
-          for t in linux/amd64 linux/arm64 linux/riscv64 linux/loong64 linux/ppc64le linux/s390x linux/386 linux/arm \
-                   darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 wasip1/wasm js/wasm; do
+          for t in $(go tool dist list | grep -v '^plan9/'); do
             os=${t%/*}; arch=${t#*/}
             for tags in "" rbgo_core; do
-              for p in $(go list ./...); do
-                GOOS=$os GOARCH=$arch go test -tags "$tags" -c -o /dev/null "$p" >/dev/null 2>err.txt || { echo "::error::$t [$tags] $p"; cat err.txt; fail=1; }
-              done
+              case $os in
+                android|ios) cmd="go build -tags=$tags $(go list -f '{{if ne .Name "main"}}{{.ImportPath}}{{end}}' ./...)" ;;
+                *)           cmd="go vet -tags=$tags ./..." ;;
+              esac
+              GOOS=$os GOARCH=$arch $cmd >/dev/null 2>err.txt || { echo "::error::$t [$tags]"; cat err.txt; fail=1; }
             done
           done
           exit $fail

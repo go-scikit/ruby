@@ -204,8 +204,8 @@ github.com/go-dataframe/dataframe v0.1.0 h1:l92liqTQ/StH5rurH2ipgvXunMbtCJAkDNWE
 github.com/go-dataframe/dataframe v0.1.0/go.mod h1:rAJdylzFafSOhTAV6z+gSs4i0D9M9XKMKqhWUjIEolk=
 github.com/go-datetime/dates v0.1.0 h1:Uj8TaTZ09DXdq75EGQ/teFdrXpfVAC3ZDHAPQvPTnaA=
 github.com/go-datetime/dates v0.1.0/go.mod h1:KeZ1wUeMScJD6HOvj3hINwbsB+GCSFjJLWcJhrBlwIo=
-github.com/go-embedded-ruby/ruby v0.8.2 h1:vj4a+NJBb7Ou6MaBWARMEdacYtnEK7NHS2Wq1Guqr9U=
-github.com/go-embedded-ruby/ruby v0.8.2/go.mod h1:6g5bwN6eYV00ctKi3XxhXggPxBV37PGaucMFf3LFLZc=
+github.com/go-embedded-ruby/ruby v0.8.3 h1:4jB2E7cVkbMCgov6ey/rrxl9owhcekWAUTQG/AzNKsY=
+github.com/go-embedded-ruby/ruby v0.8.3/go.mod h1:6g5bwN6eYV00ctKi3XxhXggPxBV37PGaucMFf3LFLZc=
 github.com/go-encryptions/unixcrypt v0.1.0 h1:XWk4h9uCDd+T2hovOzgO0B2vOdJvAwi9nbOBVb3o62c=
 github.com/go-encryptions/unixcrypt v0.1.0/go.mod h1:B1dJSjz3kdxvP7cpi5xSzyxezgBijmtNCUeCKqqDd3o=
 github.com/go-facter/facter v0.0.0-20260830120958-454b72e642ab h1:bXPxQDhADpiF/S/8jlRFhVisFPRaxPtPgjibLnOzvsE=
