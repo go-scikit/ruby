@@ -134,10 +134,10 @@ func TestRunErrors(t *testing.T) {
 	if msg := catch(Cell{Source: "1", In: []Var{{Name: "a-b", Ptr: &bad}}}); !strings.Contains(msg, "not a local variable name") {
 		t.Fatalf("msg = %q", msg)
 	}
-	if got := describe(&rb.Error{Class: "E", Message: "m", Backtrace: []string{"lib.rb:1:in 'g'", "nb.md:2:in '<main>'"}}, "nb.md"); got != "E: m\n\tfrom nb.md:2:in '<main>'" {
-		t.Fatalf("describe = %q", got)
+	if got := describe(&rb.Error{Class: "E", Message: "m", Backtrace: []string{"lib.rb:1:in 'g'", "nb.md:2:in '<main>'"}}, "nb.md"); got.Error() != "E: m\n\tfrom nb.md:2:in '<main>'" || got.Class() != "E" {
+		t.Fatalf("describe = %q (%s)", got, got.Class())
 	}
-	if got := describe(errors.New("plain"), "nb.md"); got != "plain" {
+	if got := describe(errors.New("plain"), "nb.md"); got.Error() != "plain" || got.Class() != "" {
 		t.Fatal(got)
 	}
 }
