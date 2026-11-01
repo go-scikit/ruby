@@ -113,6 +113,10 @@ func TestComplete(t *testing.T) {
 	has("pu", "puts")
 	has("St", "Stats", "String")
 	has("Sh", "Shape")
+	has("Compa", "Comparable")
+	// The top level's constants are Object.constants: a private one is not offered.
+	eval1(t, s, "Hidden833 = 1\nclass Object; private_constant :Hidden833; end", 2)
+	none("Hidden8")
 	has("whi", "while")
 	has("@i", "@iv")
 	if got := s.Complete("x"); !slices.IsSorted(got) {

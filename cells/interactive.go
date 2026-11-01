@@ -214,10 +214,9 @@ func (s *Session) receiverNames(receiver, sep string) []string {
 	return union(cands, s.names("("+receiver+").methods"))
 }
 
-// topConstants are the constants of the top level. (rbgo's Object.constants
-// is empty: Module.constants, which MRI also gives the top level's
-// constants from, is used instead.)
-func (s *Session) topConstants() []string { return s.names("Module.constants") }
+// topConstants are the public constants of the top level, Kernel's included:
+// Object.constants, which rbgo lists since go-embedded-ruby/ruby#833.
+func (s *Session) topConstants() []string { return s.names("Object.constants") }
 
 // names evaluates expr, which gives an Array of names (Symbols or Strings),
 // and returns them as strings; an error or another value gives none. The
